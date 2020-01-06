@@ -2,11 +2,13 @@ package fr.pantheonsorbonne.ufr27.miage.jms;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.StringWriter;
 
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import javax.inject.Named;
+import javax.jms.BytesMessage;
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
 import javax.jms.JMSException;
@@ -14,6 +16,8 @@ import javax.jms.MessageConsumer;
 import javax.jms.MessageProducer;
 import javax.jms.Queue;
 import javax.jms.Session;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
 
 import fr.pantheonsorbonne.ufr27.miage.DiplomaInfo;
 import fr.pantheonsorbonne.ufr27.miage.dto.BinaryDiplomaDTO;
@@ -59,8 +63,21 @@ public class BinaryDiplomaManager implements Closeable {
 		// read the message on the byte array
 		// create a BinaryDiplomaDTO containing the id of the diploma and the data
 		// return the DTO
+		try {
+			BytesMessage msg = (BytesMessage) binDiplomaConsumer.receive();
+			byte[] pld = new byte[(int) msg.getBodyLength()];
+			msg.readBytes(pld);
 
-		return null;
+			BinaryDiplomaDTO dto = new BinaryDiplomaDTO();
+			dto.setId(msg.getIntProperty("id"));
+			dto.setData(pld);
+			return dto;
+
+		} catch (JMSException e) {
+			System.out.println("Error consume message");
+			return null;
+		}
+
 	}
 
 	public void requestBinDiploma(DiplomaInfo info) {
@@ -70,6 +87,14 @@ public class BinaryDiplomaManager implements Closeable {
 		// create a Marshaller and marshall the class in the writer
 		// send a text Message containing the JAXB-marshalled object through the wire
 
+		try {
+			StringWriter writer = new StringWriter();
+			JAXBContext jaxbContext = JAXBContext.newInstance(DiplomaInfo.class);
+			jaxbContext.createMarshaller().marshal(info, writer);
+			this.diplomaRequestProducer.send(this.session.createTextMessage(writer.toString()));
+		} catch (JAXBException | JMSException e) {
+			System.out.println("Error");
+		}
 	}
 
 	@Override
